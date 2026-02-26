@@ -1,20 +1,21 @@
-CC = gcc
-CXX = g++
+CC ?= gcc
+CXX ?= g++
 
 headers = $(wildcard inc/*.h)
 src = $(wildcard src/*.c)
 
-
 objs = matrix.o vector.o
-
 
 blas_library = -lopenblas
 
 CFLAGS   ?= -Wall -fPIC -O2 -march=native
 CXXFLAGS ?= -Wall -O2 -march=native -std=c++11
 
-
-INSTALL_DIR ?= C:/MatriceInstall
+ifdef WIN32
+    INSTALL_DIR ?= C:/MatriceInstall
+else
+    INSTALL_DIR ?= /usr/local
+endif
 
 main:
 	$(CC) $(CFLAGS) -c $(src)
@@ -48,6 +49,11 @@ install:
 	@echo Installing config files
 	mkdir -p $(INSTALL_DIR)/lib/pkgconfig
 	cp matrice.pc $(INSTALL_DIR)/lib/pkgconfig
+
+install-cpp:
+	@echo Installing C++ bindings
+	mkdir -p $(INSTALL_DIR)/include/matrice
+	cp bindings/cpp/matrice.hxx $(INSTALL_DIR)/include/matrice
 
 clean:
 	rm -f *.o
