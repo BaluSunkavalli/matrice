@@ -546,153 +546,155 @@ void matrix_div(const matrix* x, const matrix* y, matrix* z) {
 }
 
 void matrix_matmul(const matrix* x, const matrix* y, matrix* z) {
-	if (!is_valid_matrix_pointer(x)) {
-		fprintf(stderr, "Error x in an invalid matrix pointer.\n");
-		exit(EXIT_FAILURE);
-	}
-	if (!is_valid_matrix_pointer(y)) {
-		fprintf(stderr, "Error y in an invalid matrix pointer.\n");
-		exit(EXIT_FAILURE);
-	}
-	if (!is_valid_matrix_pointer(z)) {
-		fprintf(stderr, "Error z in an invalid matrix pointer.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	if (!(are_float32(x, y) || are_float64(x, y) || are_int32(x, y) || are_int64(x, y))) {
-		fprintf(stderr, "Error matrix multiplication different types.");
-		exit(EXIT_FAILURE);
-	}
-	if (!(are_float32(x, z) || are_float64(x, z) || are_int32(x, z) || are_int64(x, z))) {
-		fprintf(stderr, "Error matrix multiplication different output type.");
-		exit(EXIT_FAILURE);
-	}
-
-	if (x->shape[1] != y->shape[0]) {
-		fprintf(stderr, "Error incompatible input sizes.");
-		exit(EXIT_FAILURE);
-	}
-	if ((x->shape[0] != z->shape[0]) || (y->shape[1] != z->shape[1])) {
-		fprintf(stderr, "Error incompatible output size.");
-		exit(EXIT_FAILURE);
-	}
-
-	// [m, p] x [p, n] -> [m, n]
-	uint32_t m = x->shape[0];
-	uint32_t p = x->shape[1];
-	uint32_t n = y->shape[1];
-	data_type type = x->type;
-	uint32_t y_strides_rows = y->strides[0];
-	uint32_t y_strides_cols = y->strides[1];
-	uint32_t z_strides_rows = z->strides[0];
-	uint32_t z_strides_cols = z->strides[1];
-	if (type == kint || type == kint32) {
-		// Transpose x
-		uint32_t tshape[2] = {p, m};
-		matrix* tx = matrix_make(type, tshape);
-		matrix_transpose(x, tx);
-		// Compute x*y in z
-		int* casted_tx = (int*) tx->data;
-		int* casted_y = (int*) y->data;
-		int* casted_z = (int*) z->data;
-		uint32_t tx_strides_rows = tx->strides[0];
-		uint32_t tx_strides_cols = tx->strides[1];
-		// Initialize z to zero
-		#pragma clang loop vectorize(enable)
-		for (uint32_t idx = 0; idx < m*n; idx++) {
-				casted_z[idx] = 0;
-		}
-		for (uint32_t i = 0; i < m; i++) {
-			for (uint32_t j = 0; j < n; j++) {
-				#pragma clang loop vectorize(enable)
-				for (uint32_t k = 0; k < p; k++) {
-					casted_z[i*z_strides_rows + j*z_strides_cols]
-						+= casted_tx[k*tx_strides_rows+ i*tx_strides_cols] * casted_y[k*y_strides_rows + j*y_strides_cols];
-				}
-			}
-		}
-		matrix_free(tx);
-	} else if (type == kfloat || type == kfloat32) {
-		// Transpose x
-		uint32_t tshape[2] = {p, m};
-		matrix* tx = matrix_make(type, tshape);
-		matrix_transpose(x, tx);
-		// Compute x*y in z
-		float* casted_tx = (float*) tx->data;
-		float* casted_y = (float*) y->data;
-		float* casted_z = (float*) z->data;
-		uint32_t tx_strides_rows = tx->strides[0];
-		uint32_t tx_strides_cols = tx->strides[1];
-		// Initialize z to zero
-		#pragma clang loop vectorize(enable)
-		for (uint32_t idx = 0; idx < m*n; idx++) {
-				casted_z[idx] = 0.f;
-		}
-		for (uint32_t i = 0; i < m; i++) {
-			for (uint32_t j = 0; j < n; j++) {
-				#pragma clang loop vectorize(enable)
-				for (uint32_t k = 0; k < p; k++) {
-					casted_z[i*z_strides_rows + j*z_strides_cols] 
-						+= casted_tx[k*tx_strides_rows + i*tx_strides_cols] * casted_y[k*y_strides_rows + j*y_strides_cols];
-				}
-			}
-		}
-		matrix_free(tx);
-	} else if (type == kdouble || type == kfloat64) {
-		// Transpose x
-		uint32_t tshape[2] = {p, m};
-		matrix* tx = matrix_make(type, tshape);
-		matrix_transpose(x, tx);
-		// Compute x*y in z
-		const double* casted_tx = (const double*) tx->data;
-		const double* casted_y = (const double*) y->data;
-		double* casted_z = (double*) z->data;
-		uint32_t tx_strides_rows = tx->strides[0];
-		uint32_t tx_strides_cols = tx->strides[1];
-		#pragma clang loop vectorize(enable)
-		for (uint32_t idx = 0; idx < m*n; idx++) {
-				casted_z[idx] = 0.;
-		}
-		for (uint32_t i = 0; i < m; i++) {
-			for (uint32_t j = 0; j < n; j++) {
-				#pragma clang loop vectorize(enable)
-				for (uint32_t k = 0; k < p; k++) {
-					casted_z[i*z_strides_rows + j*z_strides_cols]
-						+= casted_tx[k*tx_strides_rows+ i*tx_strides_cols] * casted_y[k*y_strides_rows + j*y_strides_cols];
-				}
-			}
-		}
-		matrix_free(tx);
-	} else if (type == kint64) {
-		// Transpose x
-		uint32_t tshape[2] = {p, m};
-		matrix* tx = matrix_make(type, tshape);
-		matrix_transpose(x, tx);
-		// Compute x*y in z
-		int64_t* casted_tx = (int64_t*) tx->data;
-		int64_t* casted_y = (int64_t*) y->data;
-		int64_t* casted_z = (int64_t*) z->data;
-		uint32_t tx_strides_rows = tx->strides[0];
-		uint32_t tx_strides_cols = tx->strides[1];
-		// Initialize z to zero
-		#pragma clang loop vectorize(enable)
-		for (uint32_t idx = 0; idx < m*n; idx++) {
-				casted_z[idx] = 0;
-		}
-		for (uint32_t i = 0; i < m; i++) {
-			for (uint32_t j = 0; j < n; j++) {
-				#pragma clang loop vectorize(enable)
-				for (uint32_t k = 0; k < p; k++) {
-					casted_z[i*z_strides_rows + j*z_strides_cols]
-						+= casted_tx[k*tx_strides_rows+ i*tx_strides_cols] * casted_y[k*y_strides_rows + j*y_strides_cols];
-				}
-			}
-		}
-		matrix_free(tx);
-	} else {
-		fprintf(stderr, "Matrix multiplication unknown data type.\n");
-		exit(EXIT_FAILURE);
-	}
+	    if (!is_valid_matrix_pointer(x)) {
+        fprintf(stderr, "Error: x is an invalid matrix pointer.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!is_valid_matrix_pointer(y)) {
+        fprintf(stderr, "Error: y is an invalid matrix pointer.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!is_valid_matrix_pointer(z)) {
+        fprintf(stderr, "Error: z is an invalid matrix pointer.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!(are_float32(x, y) || are_float64(x, y) ||
+          are_int32(x, y)   || are_int64(x, y))) {
+        fprintf(stderr, "Error: mul different types.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!(are_float32(x, z) || are_float64(x, z) ||
+          are_int32(x, z)   || are_int64(x, z))) {
+        fprintf(stderr, "Error: mul different output type.\n");
+        exit(EXIT_FAILURE);
+    }
+    uint32_t M = x->shape[0];
+    uint32_t N = x->shape[1];
+    uint32_t P = y->shape[1];
+    if (y->shape[0] != N) {
+        fprintf(stderr, "Error: input shape mismatch. x.cols != y.rows\n");
+        exit(EXIT_FAILURE);
+    }
+    if (z->shape[0] != M || z->shape[1] != P) {
+        fprintf(stderr, "Error: output matrix size mismatch.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (x->type == kfloat || x->type == kfloat32) {
+        float * restrict A = (float*) x->data;
+        float * restrict B = (float*) y->data;
+        float * restrict C = (float*) z->data;
+        for (uint32_t i = 0; i < M * P; i++)
+            C[i] = 0.0f;
+        const uint32_t BS = 64;
+        for (uint32_t ii = 0; ii < M; ii += BS)
+            for (uint32_t kk = 0; kk < N; kk += BS)
+                for (uint32_t jj = 0; jj < P; jj += BS)
+                {
+                    uint32_t i_max = (ii + BS < M) ? ii + BS : M;
+                    uint32_t k_max = (kk + BS < N) ? kk + BS : N;
+                    uint32_t j_max = (jj + BS < P) ? jj + BS : P;
+                    for (uint32_t i = ii; i < i_max; i++) {
+                        float* restrict c_row = C + i * P;
+                        float* restrict a_row = A + i * N;
+                        for (uint32_t k = kk; k < k_max; k++) {
+                            float a_val = a_row[k];
+                            float* restrict b_row = B + k * P;
+                            #pragma clang loop vectorize(enable) interleave(enable)
+                            for (uint32_t j = jj; j < j_max; j++) {
+                                c_row[j] += a_val * b_row[j];
+                            }
+                        }
+                    }
+                }
+    }
+    else if (x->type == kdouble || x->type == kfloat64) {
+        double * restrict A = (double*) x->data;
+        double * restrict B = (double*) y->data;
+        double * restrict C = (double*) z->data;
+        for (uint32_t i = 0; i < M * P; i++)
+            C[i] = 0.0;
+        const uint32_t BS = 48;
+        for (uint32_t ii = 0; ii < M; ii += BS)
+            for (uint32_t kk = 0; kk < N; kk += BS)
+                for (uint32_t jj = 0; jj < P; jj += BS)
+                {
+                    uint32_t i_max = (ii + BS < M) ? ii + BS : M;
+                    uint32_t k_max = (kk + BS < N) ? kk + BS : N;
+                    uint32_t j_max = (jj + BS < P) ? jj + BS : P;
+                    for (uint32_t i = ii; i < i_max; i++) {
+                        double* restrict c_row = C + i * P;
+                        double* restrict a_row = A + i * N;
+                        for (uint32_t k = kk; k < k_max; k++) {
+                            double a_val = a_row[k];
+                            double* restrict b_row = B + k * P;
+                            #pragma clang loop vectorize(enable) interleave(enable)
+                            for (uint32_t j = jj; j < j_max; j++) {
+                                c_row[j] += a_val * b_row[j];
+                            }
+                        }
+                    }
+                }
+    }
+    else if (x->type == kint || x->type == kint32) {
+        int32_t * restrict A = (int32_t*) x->data;
+        int32_t * restrict B = (int32_t*) y->data;
+        int32_t * restrict C = (int32_t*) z->data;
+        for (uint32_t i = 0; i < M * P; i++)
+            C[i] = 0;
+        const uint32_t BS = 64;
+        for (uint32_t ii = 0; ii < M; ii += BS)
+            for (uint32_t kk = 0; kk < N; kk += BS)
+                for (uint32_t jj = 0; jj < P; jj += BS)
+                {
+                    uint32_t i_max = (ii + BS < M) ? ii + BS : M;
+                    uint32_t k_max = (kk + BS < N) ? kk + BS : N;
+                    uint32_t j_max = (jj + BS < P) ? jj + BS : P;
+                    for (uint32_t i = ii; i < i_max; i++) {
+                        int32_t* restrict c_row = C + i * P;
+                        int32_t* restrict a_row = A + i * N;
+                        for (uint32_t k = kk; k < k_max; k++) {
+                            int32_t a_val = a_row[k];
+                            int32_t* restrict b_row = B + k * P;
+                            #pragma clang loop vectorize(enable) interleave(enable)
+                            for (uint32_t j = jj; j < j_max; j++) {
+                                c_row[j] += a_val * b_row[j];
+                            }
+                        }
+                    }
+                }
+    }
+    else if (x->type == kint64) {
+        int64_t * restrict A = (int64_t*) x->data;
+        int64_t * restrict B = (int64_t*) y->data;
+        int64_t * restrict C = (int64_t*) z->data;
+        for (uint32_t i = 0; i < M * P; i++)
+            C[i] = 0;
+        const uint32_t BS = 48;
+        for (uint32_t ii = 0; ii < M; ii += BS)
+            for (uint32_t kk = 0; kk < N; kk += BS)
+                for (uint32_t jj = 0; jj < P; jj += BS)
+                {
+                    uint32_t i_max = (ii + BS < M) ? ii + BS : M;
+                    uint32_t k_max = (kk + BS < N) ? kk + BS : N;
+                    uint32_t j_max = (jj + BS < P) ? jj + BS : P;
+                    for (uint32_t i = ii; i < i_max; i++) {
+                        int64_t* restrict c_row = C + i * P;
+                        int64_t* restrict a_row = A + i * N;
+                        for (uint32_t k = kk; k < k_max; k++) {
+                            int64_t a_val = a_row[k];
+                            int64_t* restrict b_row = B + k * P;
+                            #pragma clang loop vectorize(enable) interleave(enable)
+                            for (uint32_t j = jj; j < j_max; j++) {
+                                c_row[j] += a_val * b_row[j];
+                            }
+                        }
+                    }
+                }
+    }
+    else {
+        fprintf(stderr, "Error: unsupported type in matrix_mul.\n");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void matrix_transpose(const matrix* x, matrix* y) {
